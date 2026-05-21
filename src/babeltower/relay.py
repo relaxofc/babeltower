@@ -43,7 +43,24 @@ def _timestamp() -> str:
     return utc_now().replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
+_ERROR_MESSAGES: dict[str, str] = {
+    "message_too_large": "Frame exceeds 16 KB; split into smaller messages.",
+    "bad_json": "Frame is not valid JSON.",
+    "unsupported_type": "Only type='message' is accepted after hello.",
+    "session_mismatch": "session_id in envelope does not match this connection.",
+    "session_closed": "Session is closed; reconnect not possible.",
+    "buffer_full": "Counterparty is offline and the pre-join buffer is full.",
+}
+
+
 def _server_event(event_type: str, session_id: str, body: dict[str, Any]) -> dict[str, Any]:
+    if event_type == "error":
+        # PROTOCOL.md §7.6 requires error frames to carry a human-readable
+        # `message` alongside the machine-readable `code`. Fill in a default
+        # if the caller did not pass one.
+        code = body.get("code")
+        if code is not None and "message" not in body:
+            body = {**body, "message": _ERROR_MESSAGES.get(code, "Server error.")}
     return {
         "type": event_type,
         "session_id": session_id,

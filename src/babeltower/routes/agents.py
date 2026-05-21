@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy import delete, or_, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from babeltower.auth import MUTATION_AGENT_DEPENDENCY
+from babeltower.auth import SIGNED_AGENT_DEPENDENCY
 from babeltower.db import get_session
 from babeltower.models import Agent, Block, Intent, Session
 
@@ -55,7 +55,11 @@ async def delete_agent_account(session: AsyncSession, agent: Agent, deleted_at: 
 
 @router.delete("/agent", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_agent(
-    agent: Agent = MUTATION_AGENT_DEPENDENCY,
+    # Account deletion is allowed even while soft-banned. PROTOCOL.md §11
+    # guarantees an agent can erase its own data at any time; gating this
+    # behind MUTATION_AGENT_DEPENDENCY would trap soft-banned users until
+    # the ban lifted.
+    agent: Agent = SIGNED_AGENT_DEPENDENCY,
     session: AsyncSession = SESSION_DEPENDENCY,
 ) -> Response:
     await delete_agent_account(session, agent, _now())

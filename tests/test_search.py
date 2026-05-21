@@ -230,3 +230,20 @@ async def test_search_match_type_exact_match(make_agent, signed_client):
         response = await client.post("/v1/search", json=_search_payload())
 
     assert [item["intent_id"] for item in response.json()["candidates"]] == ["int_technical"]
+
+
+async def test_search_rejects_malformed_match_type(make_agent, signed_client):
+    """PROTOCOL.md §5.2 restricts match_type to `[a-z0-9-]+`. A search with
+    an uppercase or otherwise malformed match_type must be rejected at the
+    request boundary instead of silently returning zero results."""
+    requester = make_agent()
+    session = FakeSearchSession([requester])
+    app = _app_with_search_overrides(session)
+
+    payload = _search_payload()
+    payload["query_intent"]["match_type"] = "Co-Founder-Technical"
+
+    async with signed_client(app, requester) as client:
+        response = await client.post("/v1/search", json=payload)
+
+    assert response.status_code == 422

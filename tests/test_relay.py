@@ -311,6 +311,29 @@ async def test_relay_buffers_messages_for_disconnected_party_until_reconnect():
     assert state.closed is False
 
 
+async def test_relay_error_frames_include_human_message():
+    """PROTOCOL.md §7.6: error frames must carry both a `code` and a
+    `message`. Frames-too-large is the easiest path to trigger."""
+    db = FakeRelayDb(_db_session())
+    manager = SessionManager(session_factory=FakeRelayFactory(db))
+    sender_socket = FakeWebSocket()
+    state = _state()
+    state.sockets = {"agt_a": sender_socket, "agt_b": FakeWebSocket()}
+    state.active_at = datetime.now(timezone.utc)
+    manager._states[state.session_id] = state
+
+    oversized = "x" * (17 * 1024)
+    await manager._handle_frame(state, FakeAgent(), sender_socket, oversized)
+
+    [error_frame] = sender_socket.sent
+    assert error_frame["type"] == "error"
+    assert error_frame["body"]["code"] == "message_too_large"
+    # The message field is the human-readable hint defined in relay.py and
+    # required by §7.6 of the protocol.
+    assert isinstance(error_frame["body"].get("message"), str)
+    assert error_frame["body"]["message"]
+
+
 async def test_relay_join_closes_zombie_socket_when_agent_reconnects():
     """If the old socket is still in the state map when an agent reconnects
     (e.g. the previous loop never reached _disconnect because of a network

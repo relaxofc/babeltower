@@ -48,6 +48,9 @@ class RegistrationStatusResponse(BaseModel):
 
 
 class IntentCreateRequest(BaseModel):
+    # match_type pattern is enforced inside the route so violations return
+    # 400 + error_code: invalid_match_type per PROTOCOL.md §6.2, rather
+    # than Pydantic's default 422.
     match_type: str = Field(max_length=64)
     seeking: str = Field(max_length=2000)
     offering: str = Field(max_length=2000)
@@ -73,7 +76,7 @@ class IntentResponse(BaseModel):
 
 
 class SearchQueryIntent(BaseModel):
-    match_type: str = Field(max_length=64)
+    match_type: str = Field(max_length=64, pattern=r"^[a-z0-9-]{1,64}$")
     seeking: str = Field(max_length=2000)
     offering: str = Field(max_length=2000)
     constraints: str = Field(default="", max_length=500)
