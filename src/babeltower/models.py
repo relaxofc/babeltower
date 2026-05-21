@@ -40,7 +40,7 @@ class Agent(Base):
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=lambda: new_id("agt"))
     pubkey: Mapped[str] = mapped_column(String(128), unique=True, index=True, nullable=False)
-    github_user_id: Mapped[int] = mapped_column(BigInteger, index=True, nullable=False)
+    github_user_id: Mapped[Optional[int]] = mapped_column(BigInteger, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     last_seen_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     status: Mapped[str] = mapped_column(String(32), default="active", index=True)

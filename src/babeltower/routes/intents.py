@@ -12,8 +12,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from babeltower.auth import MUTATION_AGENT_DEPENDENCY, SIGNED_AGENT_DEPENDENCY
 from babeltower.db import get_session
 from babeltower.embeddings import embed_intent
+from babeltower.metrics import intents_created_total
 from babeltower.models import Agent, ConnectionRequest, Intent
-from babeltower.moderation import scan_intent_text
+from babeltower.moderation import check_and_apply_soft_ban, scan_intent_text
 from babeltower.schemas import IntentCreateRequest, IntentResponse
 
 router = APIRouter()
@@ -243,6 +244,10 @@ async def create_intent(
         redis=redis,
     )
     intent = await persist_intent(session, agent, body, embedding, created_at)
+    await check_and_apply_soft_ban(session, agent.id, created_at)
+    if hasattr(session, "commit"):
+        await session.commit()
+    intents_created_total.inc()
     return _to_response(intent, agent.pubkey)
 
 

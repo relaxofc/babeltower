@@ -43,6 +43,11 @@ class FakeMaintenanceSession:
                 session.closed_at = now
                 session.close_reason = "awaiting_join_expired"
 
+        for agent in self.agents:
+            if agent.status == "soft_banned" and agent.soft_ban_lifts_at <= now:
+                agent.status = "active"
+                agent.soft_ban_lifts_at = None
+
 
 class FakeSessionFactory:
     def __init__(self, session: FakeMaintenanceSession):
@@ -141,3 +146,17 @@ async def test_maintenance_reactivates_after_poll():
     await run_maintenance(FakeSessionFactory(session), now_func=lambda: now + timedelta(seconds=1))
 
     assert intent.status == "active"
+
+
+async def test_maintenance_lifts_expired_soft_ban():
+    now = datetime.now(timezone.utc)
+    agent = _agent("agt_soft_banned", now)
+    agent.status = "soft_banned"
+    agent.soft_ban_lifts_at = now - timedelta(seconds=1)
+    session = FakeMaintenanceSession()
+    session.agents = [agent]
+
+    await run_maintenance(FakeSessionFactory(session), now_func=lambda: now)
+
+    assert agent.status == "active"
+    assert agent.soft_ban_lifts_at is None

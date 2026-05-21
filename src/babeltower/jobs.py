@@ -32,6 +32,12 @@ async def run_maintenance(
         active_agents = select(Agent.id).where(Agent.last_seen_at >= cutoff)
 
         await session.execute(
+            update(Agent)
+            .where(Agent.status == "soft_banned", Agent.soft_ban_lifts_at <= now)
+            .values(status="active", soft_ban_lifts_at=None)
+        )
+
+        await session.execute(
             update(Intent)
             .where(Intent.status == "active", Intent.agent_id.in_(inactive_agents))
             .values(status="dormant")

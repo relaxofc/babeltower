@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from babeltower.auth import MUTATION_AGENT_DEPENDENCY
 from babeltower.db import get_session
+from babeltower.metrics import matches_confirmed_total
 from babeltower.models import Agent, Session
 from babeltower.relay import session_manager
 from babeltower.schemas import (
@@ -55,6 +56,14 @@ async def get_agent_pubkey(session: AsyncSession, agent_id: str) -> str:
     result = await session.execute(select(Agent.pubkey).where(Agent.id == agent_id))
     pubkey = result.scalar_one()
     return str(pubkey)
+
+
+async def get_agent_by_id(session: AsyncSession, agent_id: str) -> Optional[Agent]:
+    if hasattr(session, "get_agent_by_id"):
+        return await session.get_agent_by_id(agent_id)  # type: ignore[attr-defined]
+    if not hasattr(session, "get"):
+        return None
+    return await session.get(Agent, agent_id)
 
 
 @router.post("/match/propose", response_model=MatchProposeResponse)
@@ -112,7 +121,11 @@ async def accept_match(
     session_row.status = "match_confirmed"
     session_row.match_confirmed_at = confirmed_at
     agent.matches_confirmed_total = (agent.matches_confirmed_total or 0) + 1
+    proposer = await get_agent_by_id(session, session_row.match_proposed_by_id)
+    if proposer is not None:
+        proposer.matches_confirmed_total = (proposer.matches_confirmed_total or 0) + 1
     await session.commit()
+    matches_confirmed_total.inc()
     await session_manager.emit_to_session(
         session_row.id,
         "match_confirmed",

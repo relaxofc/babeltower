@@ -23,3 +23,15 @@ async def test_server_info(client):
         "connection_request_ttl_hours": 72,
     }
 
+
+async def test_metrics_exposes_custom_babeltower_metrics(client):
+    response = await client.get("/metrics")
+
+    assert response.status_code == 200
+    body = response.text
+    assert "babeltower_intents_created_total" in body
+    assert "babeltower_searches_total" in body
+    assert "babeltower_active_sessions" in body
+    assert "babeltower_messages_relayed_total" in body
+    assert "babeltower_matches_confirmed_total" in body
+    assert "babeltower_soft_bans_applied_total" in body

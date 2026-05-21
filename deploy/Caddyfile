@@ -1,0 +1,10 @@
+# Replace babeltower.xyz with the domain you actually purchased. Caddy will
+# automatically obtain and renew a TLS certificate for this hostname.
+babeltower.xyz {
+    reverse_proxy localhost:8000
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options nosniff
+        Referrer-Policy strict-origin-when-cross-origin
+    }
+}

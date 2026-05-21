@@ -12,6 +12,7 @@ from babeltower.auth import MUTATION_AGENT_DEPENDENCY
 from babeltower.config import get_settings
 from babeltower.db import get_session
 from babeltower.models import Agent, Block, ConnectionRequest, Intent, Session
+from babeltower.moderation import check_and_apply_soft_ban
 from babeltower.schemas import (
     ConnectionCreateRequest,
     ConnectionCreateResponse,
@@ -247,6 +248,9 @@ async def create_connection(
         return _error_response(429, "rate_limited")
 
     request = await create_connection_request(session, agent, target_agent, body, created_at)
+    await check_and_apply_soft_ban(session, agent.id, created_at)
+    if hasattr(session, "commit"):
+        await session.commit()
     return ConnectionCreateResponse(
         request_id=request.id,
         target_agent_pubkey=target_agent.pubkey,

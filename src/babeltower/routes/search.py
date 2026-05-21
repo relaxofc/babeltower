@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from babeltower.auth import SIGNED_AGENT_DEPENDENCY
 from babeltower.db import get_session
+from babeltower.metrics import searches_total
 from babeltower.models import Agent
 from babeltower.rate_limit import limiter
 from babeltower.routes.intents import get_redis
@@ -108,4 +109,5 @@ async def search(
         redis=redis,
     )
     candidates = await search_intents(session, agent, body, query_embedding)
+    searches_total.inc()
     return SearchResponse(candidates=candidates)

@@ -201,3 +201,7 @@ class BlockResponse(BaseModel):
     target_agent_pubkey: str
     reason: Optional[str] = None
     created_at: datetime
+
+
+class BlocksResponse(BaseModel):
+    blocks: list[BlockResponse]

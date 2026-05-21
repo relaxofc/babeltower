@@ -1,4 +1,14 @@
+from __future__ import annotations
+
 import re
+from datetime import datetime, timedelta, timezone
+from typing import Optional
+
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from babeltower.metrics import soft_bans_applied_total
+from babeltower.models import AbuseEvent, Agent, Block, ConnectionRequest, Intent
 
 EMAIL_RE = re.compile(r"[\w._%+-]+@(?:[\w.-]+\.[a-zA-Z]{2,}|[A-Za-z][\w-]{2,})")
 PHONE_RE = re.compile(
@@ -38,3 +48,160 @@ def scan_intent_text(text: str) -> list[str]:
         violations.append("url")
 
     return violations
+
+
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+async def _count_blocks_received_since(
+    session: AsyncSession,
+    agent_id: str,
+    since: datetime,
+) -> int:
+    return int(
+        await session.scalar(
+            select(func.count())
+            .select_from(Block)
+            .where(Block.blocked_id == agent_id, Block.created_at >= since)
+        )
+        or 0
+    )
+
+
+async def _count_connections_sent_since(
+    session: AsyncSession,
+    agent_id: str,
+    since: datetime,
+) -> int:
+    return int(
+        await session.scalar(
+            select(func.count())
+            .select_from(ConnectionRequest)
+            .where(
+                ConnectionRequest.from_agent_id == agent_id,
+                ConnectionRequest.created_at >= since,
+            )
+        )
+        or 0
+    )
+
+
+async def _count_connections_accepted_since(
+    session: AsyncSession,
+    agent_id: str,
+    since: datetime,
+) -> int:
+    return int(
+        await session.scalar(
+            select(func.count())
+            .select_from(ConnectionRequest)
+            .where(
+                ConnectionRequest.to_agent_id == agent_id,
+                ConnectionRequest.status == "accepted",
+                ConnectionRequest.responded_at >= since,
+            )
+        )
+        or 0
+    )
+
+
+async def _count_intents_created_since(
+    session: AsyncSession,
+    agent_id: str,
+    since: datetime,
+) -> int:
+    return int(
+        await session.scalar(
+            select(func.count())
+            .select_from(Intent)
+            .where(Intent.agent_id == agent_id, Intent.created_at >= since)
+        )
+        or 0
+    )
+
+
+async def apply_soft_ban(
+    session: AsyncSession,
+    agent: Agent,
+    reason: str,
+    now: Optional[datetime] = None,
+    details: Optional[dict] = None,
+) -> bool:
+    now = now or utc_now()
+    if agent.status == "soft_banned":
+        return False
+
+    agent.status = "soft_banned"
+    agent.soft_ban_lifts_at = now + timedelta(days=7)
+    session.add(
+        AbuseEvent(
+            agent_id=agent.id,
+            event_type="soft_ban_applied",
+            details={"reason": reason, **(details or {})},
+            created_at=now,
+        )
+    )
+    await session.execute(
+        Intent.__table__.update()
+        .where(Intent.agent_id == agent.id, Intent.status == "active")
+        .values(status="dormant")
+    )
+    soft_bans_applied_total.inc()
+    return True
+
+
+async def check_and_apply_soft_ban(
+    session: AsyncSession,
+    agent_id: str,
+    now: Optional[datetime] = None,
+) -> bool:
+    if hasattr(session, "check_and_apply_soft_ban"):
+        return await session.check_and_apply_soft_ban(agent_id, now)  # type: ignore[attr-defined]
+    if not hasattr(session, "get"):
+        return False
+
+    now = now or utc_now()
+    agent = await session.get(Agent, agent_id)
+    if agent is None or agent.status in {"soft_banned", "hard_banned", "deleted"}:
+        return False
+
+    seven_days_ago = now - timedelta(days=7)
+    one_day_ago = now - timedelta(days=1)
+
+    blocks_received = await _count_blocks_received_since(session, agent_id, seven_days_ago)
+    if blocks_received > 5:
+        return await apply_soft_ban(
+            session,
+            agent,
+            "blocks_received",
+            now,
+            {"blocks_received_7d": blocks_received},
+        )
+
+    sent_7d = await _count_connections_sent_since(session, agent_id, seven_days_ago)
+    accepted_7d = await _count_connections_accepted_since(session, agent_id, seven_days_ago)
+    denominator = max(accepted_7d, 1)
+    if sent_7d >= 50 and sent_7d / denominator > 50:
+        return await apply_soft_ban(
+            session,
+            agent,
+            "connection_spam",
+            now,
+            {
+                "connection_requests_sent_7d": sent_7d,
+                "connection_requests_accepted_7d": accepted_7d,
+            },
+        )
+
+    intents_24h = await _count_intents_created_since(session, agent_id, one_day_ago)
+    if intents_24h > 100:
+        return await apply_soft_ban(
+            session,
+            agent,
+            "intent_creation_burst",
+            now,
+            {"intents_created_24h": intents_24h},
+        )
+
+    return False

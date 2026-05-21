@@ -3,8 +3,9 @@ services:
     build: .
     env_file:
       - .env
+    command: sh -c "alembic upgrade head && uvicorn babeltower.main:app --host 0.0.0.0 --port 8000"
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     depends_on:
       db:
         condition: service_healthy
@@ -15,6 +16,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
     networks:
       - babeltower
 
@@ -22,15 +24,16 @@ services:
     image: pgvector/pgvector:pg16
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-babeltower}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required in production}
       POSTGRES_DB: ${POSTGRES_DB:-babeltower}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U babeltower -d babeltower"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-babeltower} -d $${POSTGRES_DB:-babeltower}"]
       interval: 5s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
     networks:
       - babeltower
 
@@ -41,6 +44,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+    restart: unless-stopped
     networks:
       - babeltower
 

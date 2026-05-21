@@ -43,6 +43,9 @@ class FakeMatchSession:
     async def get_agent_pubkey_by_id(self, agent_id: str):
         return self.agents_by_id[agent_id].pubkey
 
+    async def get_agent_by_id(self, agent_id: str):
+        return self.agents_by_id.get(agent_id)
+
     async def commit(self):
         self.commits += 1
 
@@ -80,6 +83,8 @@ async def test_match_propose_accept_confirms_session(make_agent, signed_client):
     assert session_row.match_confirmed_at is not None
     assert accept_response.status_code == 200
     assert accept_response.json()["match_status"] == "confirmed"
+    assert proposer.row.matches_confirmed_total == 1
+    assert accepter.row.matches_confirmed_total == 1
 
 
 async def test_match_reject_returns_to_active_and_can_repropose(make_agent, signed_client):

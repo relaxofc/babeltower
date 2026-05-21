@@ -11,9 +11,25 @@ from babeltower import __version__
 from babeltower.config import get_settings
 from babeltower.db import async_session, close_engine
 from babeltower.jobs import shutdown_scheduler, start_scheduler
+from babeltower.logging import (
+    configure_logging,
+    sentry_before_send,
+    structured_access_log_middleware,
+)
 from babeltower.rate_limit import limiter
 from babeltower.relay import session_manager
-from babeltower.routes import connections, inbox, intents, matches, meta, register, search, sessions
+from babeltower.routes import (
+    agents,
+    blocks,
+    connections,
+    inbox,
+    intents,
+    matches,
+    meta,
+    register,
+    search,
+    sessions,
+)
 
 try:
     from slowapi import _rate_limit_exceeded_handler
@@ -28,11 +44,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     redis_client = None
     scheduler = None
+    configure_logging(settings.log_level)
 
     if settings.sentry_dsn:
         import sentry_sdk
 
-        sentry_sdk.init(dsn=settings.sentry_dsn, environment=settings.env)
+        sentry_sdk.init(
+            dsn=settings.sentry_dsn,
+            environment=settings.env,
+            before_send=sentry_before_send,
+        )
 
     if settings.env != "test":
         async with async_session() as session:
@@ -55,6 +76,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 def create_app() -> FastAPI:
     app = FastAPI(title="BabelTower", version=__version__, lifespan=lifespan)
     app.state.limiter = limiter
+    app.middleware("http")(structured_access_log_middleware)
     if RateLimitExceeded is not None and _rate_limit_exceeded_handler is not None:
         app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
     app.include_router(meta.router, prefix="/v1", tags=["meta"])
@@ -65,6 +87,8 @@ def create_app() -> FastAPI:
     app.include_router(inbox.router, prefix="/v1", tags=["inbox"])
     app.include_router(sessions.router, prefix="/v1", tags=["sessions"])
     app.include_router(matches.router, prefix="/v1", tags=["matches"])
+    app.include_router(blocks.router, prefix="/v1", tags=["blocks"])
+    app.include_router(agents.router, prefix="/v1", tags=["agents"])
 
     @app.websocket("/v1/session/{session_id}")
     async def websocket_session(websocket: WebSocket, session_id: str) -> None:

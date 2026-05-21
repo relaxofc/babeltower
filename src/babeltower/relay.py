@@ -13,6 +13,7 @@ from starlette.websockets import WebSocketDisconnect
 
 from babeltower.crypto import verify
 from babeltower.db import async_session
+from babeltower.metrics import active_sessions, messages_relayed_total
 from babeltower.models import Agent, Session
 
 HELLO_CLOSE_CODE = 4401
@@ -65,6 +66,7 @@ class SessionState:
     monitor_task: Optional[asyncio.Task] = None
     handoff_task: Optional[asyncio.Task] = None
     closed: bool = False
+    active_metric_counted: bool = False
 
 
 class SessionManager:
@@ -85,6 +87,9 @@ class SessionManager:
             lock = asyncio.Lock()
             self._locks[session_id] = lock
         return lock
+
+    def has_session(self, session_id: str) -> bool:
+        return session_id in self._states
 
     async def handle_websocket(self, websocket: WebSocket, session_id: str) -> None:
         await websocket.accept()
@@ -188,6 +193,8 @@ class SessionManager:
                 state.active_at = self._now()
                 state.last_message_at = self._now()
                 await self._set_session_active(session_row.id)
+                active_sessions.inc()
+                state.active_metric_counted = True
                 state.monitor_task = asyncio.create_task(self._monitor_limits(state))
             return state
 
@@ -205,6 +212,12 @@ class SessionManager:
             session_row = await db.get(Session, session_id)
             if session_row is not None and session_row.status == "awaiting_join":
                 session_row.status = "active"
+                agent_a = await db.get(Agent, session_row.agent_a_id)
+                agent_b = await db.get(Agent, session_row.agent_b_id)
+                if agent_a is not None:
+                    agent_a.sessions_started_total = (agent_a.sessions_started_total or 0) + 1
+                if agent_b is not None:
+                    agent_b.sessions_started_total = (agent_b.sessions_started_total or 0) + 1
                 await db.commit()
 
     async def _flush_for_joined_agent(self, state: SessionState, joined_agent_id: str) -> None:
@@ -262,6 +275,7 @@ class SessionManager:
                 envelope["from"] = state.pubkeys_by_agent_id.get(agent.id, envelope.get("from"))
                 if state.message_count % 10 == 0:
                     await self._persist_message_count(state.session_id, state.message_count)
+                messages_relayed_total.inc()
 
                 recipients = state.member_ids - {agent.id}
 
@@ -369,6 +383,9 @@ class SessionManager:
                     state.monitor_task.cancel()
                 if state.handoff_task is not None:
                     state.handoff_task.cancel()
+                if state.active_metric_counted:
+                    active_sessions.dec()
+                    state.active_metric_counted = False
                 await self._persist_closed(session_id, reason, state.message_count)
                 event = _server_event("session_ended", session_id, {"reason": reason})
                 for websocket in list(state.sockets.values()):

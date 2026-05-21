@@ -263,12 +263,15 @@ async def test_connect_accept_and_inbox_happy_path(make_agent, signed_client):
         requester_session_inbox = await client.get("/v1/inbox")
 
     assert connect_response.status_code == 201
+    assert requester.row.connection_requests_sent_total == 1
+    assert target.row.connection_requests_received_total == 1
     assert inbox_response.json()["pending_requests"][0]["request_id"] == request_id
     assert (
         inbox_response.json()["pending_requests"][0]["from_intent"]["intent_id"]
         == from_intent.id
     )
     assert accept_response.status_code == 201
+    assert target.row.connection_requests_accepted_total == 1
     session_id = accept_response.json()["session_id"]
     assert (
         target_session_inbox.json()["accepted_sessions_awaiting_join"][0]["session_id"]
