@@ -265,3 +265,82 @@ def test_websocket_bad_hello_closes_4401(make_agent, monkeypatch):
                 ws.receive_json()
 
     assert exc_info.value.code == 4401
+
+
+async def test_relay_buffers_messages_for_disconnected_party_until_reconnect():
+    """Phase 7 owner-review: agent disconnects mid-session and reconnects.
+
+    Both parties are active, B disconnects, A keeps sending; once B
+    reconnects with a fresh socket the buffered messages must flush in
+    order and the active_sessions metric must not be touched (since the
+    session never left ACTIVE).
+    """
+    db = FakeRelayDb(_db_session())
+    manager = SessionManager(session_factory=FakeRelayFactory(db))
+
+    a_sock = FakeWebSocket()
+    b_sock1 = FakeWebSocket()
+    state = _state()
+    state.sockets = {"agt_a": a_sock, "agt_b": b_sock1}
+    state.active_at = datetime.now(timezone.utc)
+    state.active_metric_counted = True
+    manager._states[state.session_id] = state
+
+    # B's connection drops; receive loop calls _disconnect with B's socket.
+    await manager._disconnect(state, "agt_b", b_sock1)
+    assert "agt_b" not in state.sockets
+
+    # A sends two messages while B is offline. Both must be buffered, and
+    # the stale b_sock1 must not receive anything (would indicate a leak).
+    await manager._handle_frame(state, FakeAgent(), a_sock, _message(1))
+    await manager._handle_frame(state, FakeAgent(), a_sock, _message(2))
+    assert len(state.buffers["agt_a"]) == 2
+    assert b_sock1.sent == []
+
+    # B reconnects with a fresh socket; the manager registers it and
+    # flushes the buffered messages in order.
+    b_sock2 = FakeWebSocket()
+    state.sockets["agt_b"] = b_sock2
+    await manager._flush_for_joined_agent(state, "agt_b")
+
+    assert [frame["body"] for frame in b_sock2.sent] == [{"n": 1}, {"n": 2}]
+    assert all(frame["from"] == "pub_a" for frame in b_sock2.sent)
+    assert state.buffers["agt_a"] == []
+    # Session was never closed by the reconnect; the active flag stays set.
+    assert state.active_metric_counted is True
+    assert state.closed is False
+
+
+async def test_relay_join_closes_zombie_socket_when_agent_reconnects():
+    """If the old socket is still in the state map when an agent reconnects
+    (e.g. the previous loop never reached _disconnect because of a network
+    blip), _join must close the stale socket before swapping in the new
+    one. Otherwise the old socket would receive forwarded frames forever.
+    """
+    db = FakeRelayDb(_db_session())
+    manager = SessionManager(session_factory=FakeRelayFactory(db))
+
+    stale_sock = FakeWebSocket()
+    other_sock = FakeWebSocket()
+    state = _state()
+    state.sockets = {"agt_a": stale_sock, "agt_b": other_sock}
+    state.active_at = datetime.now(timezone.utc)
+    state.active_metric_counted = True
+    manager._states[state.session_id] = state
+
+    async def _no_op_pubkeys(_session_row):
+        return state.pubkeys_by_agent_id
+
+    manager._load_pubkeys = _no_op_pubkeys  # type: ignore[assignment]
+
+    class _AgentStub:
+        id = "agt_a"
+
+    new_sock = FakeWebSocket()
+    await manager._join(new_sock, db.session, _AgentStub())
+
+    assert state.sockets["agt_a"] is new_sock
+    assert stale_sock.closed is True
+    # The counterparty's socket must not be touched.
+    assert state.sockets["agt_b"] is other_sock
+    assert other_sock.closed is False
