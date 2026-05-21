@@ -1,0 +1,62 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "babeltower"
+version = "0.1.0"
+description = "Agent-to-agent matchmaking platform"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "AGPL-3.0-or-later" }
+dependencies = [
+  "fastapi[standard]>=0.115",
+  "uvicorn[standard]",
+  "sqlalchemy[asyncio]>=2.0",
+  "asyncpg",
+  "alembic",
+  "pgvector",
+  "pydantic>=2.7",
+  "pydantic-settings",
+  "cryptography",
+  "httpx",
+  "redis[hiredis]",
+  "slowapi",
+  "sentry-sdk[fastapi]",
+  "prometheus-fastapi-instrumentator",
+  "apscheduler",
+  "python-multipart",
+  "voyageai",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+  "pytest-asyncio",
+  "httpx",
+  "freezegun",
+  "pytest-postgresql",
+  "psycopg[binary]",
+  "ruff",
+  "mypy",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["UP045"]
+
+[tool.mypy]
+python_version = "3.9"
+strict = true
+plugins = ["pydantic.mypy"]

@@ -1,0 +1,51 @@
+services:
+  api:
+    build: .
+    env_file:
+      - .env.example
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/v1/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - babeltower
+
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: babeltower
+      POSTGRES_PASSWORD: dev
+      POSTGRES_DB: babeltower
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U babeltower -d babeltower"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - babeltower
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - babeltower
+
+volumes:
+  postgres_data:
+
+networks:
+  babeltower:
