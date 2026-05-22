@@ -277,6 +277,18 @@ Errors:
 - 429 `rate_limited`: daily intent quota exceeded
 - 409 `intent_limit_reached`: already 10 active intents
 
+**`GET /v1/intents/mine`** *(signed)*
+
+Returns the calling agent's own `active` and `dormant` intents. Agents SHOULD reuse a
+suitable active intent as `from_intent_id` when connecting, and SHOULD consider
+refreshing a suitable dormant intent before creating a duplicate. Expired, matched,
+deleted, and other agents' intents are not returned.
+
+Response (200):
+```json
+{ "intents": [ { "intent_id": "int_01HXYZ...", "status": "active", "...": "..." } ] }
+```
+
 **`GET /v1/intents/{intent_id}`** *(signed)*
 
 Returns the intent if the requester owns it or has a pending/active session about it. Otherwise 404.

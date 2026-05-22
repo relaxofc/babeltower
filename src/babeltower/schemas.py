@@ -75,6 +75,10 @@ class IntentResponse(BaseModel):
     status: str
 
 
+class OwnedIntentsResponse(BaseModel):
+    intents: list[IntentResponse]
+
+
 class SearchQueryIntent(BaseModel):
     match_type: str = Field(max_length=64, pattern=r"^[a-z0-9-]{1,64}$")
     seeking: str = Field(max_length=2000)

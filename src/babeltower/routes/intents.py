@@ -15,7 +15,7 @@ from babeltower.embeddings import embed_intent
 from babeltower.metrics import intents_created_total
 from babeltower.models import Agent, ConnectionRequest, Intent
 from babeltower.moderation import check_and_apply_soft_ban, scan_intent_text
-from babeltower.schemas import IntentCreateRequest, IntentResponse
+from babeltower.schemas import IntentCreateRequest, IntentResponse, OwnedIntentsResponse
 
 router = APIRouter()
 SESSION_DEPENDENCY = Depends(get_session)
@@ -185,6 +185,21 @@ async def get_owned_intent(
     return result.scalar_one_or_none()
 
 
+async def list_reusable_owned_intents(session: AsyncSession, agent: Agent) -> list[Intent]:
+    if hasattr(session, "list_reusable_owned_intents"):
+        return await session.list_reusable_owned_intents(agent)  # type: ignore[attr-defined]
+
+    result = await session.execute(
+        select(Intent)
+        .where(
+            Intent.agent_id == agent.id,
+            Intent.status.in_(("active", "dormant")),
+        )
+        .order_by(Intent.created_at.desc())
+    )
+    return list(result.scalars())
+
+
 async def soft_delete_intent(session: AsyncSession, intent: Intent) -> None:
     if hasattr(session, "delete_intent"):
         await session.delete_intent(intent)  # type: ignore[attr-defined]
@@ -256,6 +271,17 @@ async def get_agent_pubkey_by_id(session: AsyncSession, agent_id: str) -> Option
         return await session.get_agent_pubkey_by_id(agent_id)  # type: ignore[attr-defined]
     result = await session.execute(select(Agent.pubkey).where(Agent.id == agent_id))
     return result.scalar_one_or_none()
+
+
+@router.get("/intents/mine", response_model=OwnedIntentsResponse)
+async def get_my_intents(
+    agent: Agent = SIGNED_AGENT_DEPENDENCY,
+    session: AsyncSession = SESSION_DEPENDENCY,
+) -> OwnedIntentsResponse:
+    intents = await list_reusable_owned_intents(session, agent)
+    return OwnedIntentsResponse(
+        intents=[_to_response(intent, agent.pubkey) for intent in intents],
+    )
 
 
 @router.get("/intents/{intent_id}", response_model=IntentResponse)

@@ -79,6 +79,14 @@ class FakeIntentSession:
             return None
         return intent
 
+    async def list_reusable_owned_intents(self, agent: Agent):
+        reusable = [
+            intent
+            for intent in self.intents.values()
+            if intent.agent_id == agent.id and intent.status in {"active", "dormant"}
+        ]
+        return sorted(reusable, key=lambda intent: intent.created_at, reverse=True)
+
     async def delete_intent(self, intent: Intent):
         intent.status = "deleted"
 
@@ -238,6 +246,59 @@ async def test_get_intent_counterparty_visible_returns_owner_pubkey(make_agent, 
         "intent must be attributed to its owner, not the requesting counterparty"
     )
     assert payload["agent_pubkey"] != other.public_key
+
+
+async def test_get_my_intents_returns_owned_active_and_dormant_only(make_agent, signed_client):
+    owner = make_agent(github_user_id=1)
+    other = make_agent(github_user_id=2)
+    session = FakeIntentSession([owner, other])
+    app = _app_with_intent_overrides(session)
+
+    async with signed_client(app, owner) as client:
+        active_response = await client.post("/v1/intents", json=_intent_payload())
+        dormant_response = await client.post(
+            "/v1/intents",
+            json=_intent_payload(seeking="dormant biotech founder intent"),
+        )
+        deleted_response = await client.post(
+            "/v1/intents",
+            json=_intent_payload(seeking="deleted biotech founder intent"),
+        )
+        expired_response = await client.post(
+            "/v1/intents",
+            json=_intent_payload(seeking="expired biotech founder intent"),
+        )
+        matched_response = await client.post(
+            "/v1/intents",
+            json=_intent_payload(seeking="matched biotech founder intent"),
+        )
+
+    async with signed_client(app, other) as client:
+        other_response = await client.post("/v1/intents", json=_intent_payload())
+
+    dormant_id = dormant_response.json()["intent_id"]
+    deleted_id = deleted_response.json()["intent_id"]
+    expired_id = expired_response.json()["intent_id"]
+    matched_id = matched_response.json()["intent_id"]
+    session.intents[dormant_id].status = "dormant"
+    session.intents[deleted_id].status = "deleted"
+    session.intents[expired_id].status = "expired"
+    session.intents[matched_id].status = "matched"
+
+    async with signed_client(app, owner) as client:
+        response = await client.get("/v1/intents/mine")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert {item["intent_id"] for item in payload["intents"]} == {
+        active_response.json()["intent_id"],
+        dormant_id,
+    }
+    assert {item["status"] for item in payload["intents"]} == {"active", "dormant"}
+    assert all(item["agent_pubkey"] == owner.public_key for item in payload["intents"])
+    assert other_response.json()["intent_id"] not in {
+        item["intent_id"] for item in payload["intents"]
+    }
 
 
 async def test_delete_intent_sets_deleted(make_agent, signed_client):
