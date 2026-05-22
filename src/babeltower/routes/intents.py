@@ -251,6 +251,13 @@ async def create_intent(
     return _to_response(intent, agent.pubkey)
 
 
+async def get_agent_pubkey_by_id(session: AsyncSession, agent_id: str) -> Optional[str]:
+    if hasattr(session, "get_agent_pubkey_by_id"):
+        return await session.get_agent_pubkey_by_id(agent_id)  # type: ignore[attr-defined]
+    result = await session.execute(select(Agent.pubkey).where(Agent.id == agent_id))
+    return result.scalar_one_or_none()
+
+
 @router.get("/intents/{intent_id}", response_model=IntentResponse)
 async def get_intent(
     intent_id: str,
@@ -260,7 +267,16 @@ async def get_intent(
     intent = await get_visible_intent(session, agent, intent_id)
     if intent is None:
         raise HTTPException(status_code=404, detail="intent not found")
-    return _to_response(intent, agent.pubkey)
+    # The response must carry the *owner's* pubkey, not the caller's.
+    # When the caller is fetching their own intent these are identical;
+    # when they're fetching a counterparty's intent (visible via an
+    # active/pending session), using the caller's pubkey misattributes
+    # the intent to the requester.
+    if intent.agent_id == agent.id:
+        owner_pubkey = agent.pubkey
+    else:
+        owner_pubkey = await get_agent_pubkey_by_id(session, intent.agent_id) or ""
+    return _to_response(intent, owner_pubkey)
 
 
 @router.delete("/intents/{intent_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -56,9 +56,22 @@ class FakeIntentSession:
 
     async def get_visible_intent(self, agent: Agent, intent_id: str):
         intent = self.intents.get(intent_id)
-        if intent is None or intent.agent_id != agent.id:
+        if intent is None:
             return None
-        return intent
+        if intent.agent_id == agent.id:
+            return intent
+        # Tests may opt-in to counterparty visibility (simulating an active
+        # connection request) by adding the agent's id to allowed_viewers.
+        allowed = getattr(intent, "_allowed_viewers", set())
+        if agent.id in allowed:
+            return intent
+        return None
+
+    async def get_agent_pubkey_by_id(self, agent_id: str):
+        for row in self._agents.values():
+            if row.id == agent_id:
+                return row.pubkey
+        return None
 
     async def get_owned_intent(self, agent: Agent, intent_id: str):
         intent = self.intents.get(intent_id)
@@ -193,6 +206,38 @@ async def test_get_intent_owner_can_see_other_agent_gets_404(make_agent, signed_
 
     assert owner_response.status_code == 200
     assert other_response.status_code == 404
+    # The owner fetching their own intent must see their own pubkey.
+    assert owner_response.json()["agent_pubkey"] == owner.public_key
+
+
+async def test_get_intent_counterparty_visible_returns_owner_pubkey(make_agent, signed_client):
+    """Regression: when a counterparty fetches an intent that's visible to
+    them (via an active/pending session), the response must carry the
+    *owner's* pubkey, not the requester's. Previously _to_response used
+    the caller's pubkey, which misattributed every cross-agent intent
+    fetch to the requester themself."""
+    owner = make_agent(github_user_id=1)
+    other = make_agent(github_user_id=2)
+    session = FakeIntentSession([owner, other])
+    app = _app_with_intent_overrides(session)
+
+    async with signed_client(app, owner) as client:
+        create_response = await client.post("/v1/intents", json=_intent_payload())
+        intent_id = create_response.json()["intent_id"]
+
+    # Simulate an active connection request making the intent visible to `other`.
+    session.intents[intent_id]._allowed_viewers = {other.row.id}
+
+    async with signed_client(app, other) as client:
+        response = await client.get(f"/v1/intents/{intent_id}")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["intent_id"] == intent_id
+    assert payload["agent_pubkey"] == owner.public_key, (
+        "intent must be attributed to its owner, not the requesting counterparty"
+    )
+    assert payload["agent_pubkey"] != other.public_key
 
 
 async def test_delete_intent_sets_deleted(make_agent, signed_client):
