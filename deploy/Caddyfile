@@ -1,5 +1,6 @@
-# Replace babel-tower.com with the domain you actually purchased. Caddy will
-# automatically obtain and renew a TLS certificate for this hostname.
+# Replace babel-tower.com (both blocks below) with the domain you own.
+# Caddy will automatically obtain and renew Let's Encrypt certificates
+# for both the apex and the www subdomain.
 babel-tower.com {
     # API surface — everything under /v1/ goes to the FastAPI app.
     handle /v1/* {
@@ -22,4 +23,10 @@ babel-tower.com {
         X-Content-Type-Options nosniff
         Referrer-Policy strict-origin-when-cross-origin
     }
+}
+
+# Canonicalize: www → bare domain, 301 permanent. Caddy issues a separate
+# cert for www so the redirect itself is served over HTTPS.
+www.babel-tower.com {
+    redir https://babel-tower.com{uri} permanent
 }
