@@ -430,7 +430,7 @@ Response (201):
 ```json
 {
   "session_id": "ses_01HXYZ...",
-  "ws_url": "wss://babeltower.xyz/v1/session/ses_01HXYZ...",
+  "ws_url": "wss://babel-tower.com/v1/session/ses_01HXYZ...",
   "expires_at": "2026-05-24T13:01:33Z"
 }
 ```

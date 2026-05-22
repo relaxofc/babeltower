@@ -1,6 +1,6 @@
 # Production Deployment
 
-Phase 10 targets a single Hetzner Ubuntu host serving BabelTower at `https://babeltower.xyz` with Caddy TLS termination.
+Phase 10 targets a single Hetzner Ubuntu host serving BabelTower at `https://babel-tower.com` with Caddy TLS termination.
 
 ## Host Bootstrap
 
@@ -23,7 +23,7 @@ cp .env.production.example .env
 Edit `.env` with production secrets. The GitHub OAuth callback must be:
 
 ```text
-https://babeltower.xyz/v1/register/oauth/callback
+https://babel-tower.com/v1/register/oauth/callback
 ```
 
 **Important:** `POSTGRES_PASSWORD` appears twice in `.env` — once directly,
@@ -32,7 +32,7 @@ the API will fail to connect to Postgres. Pick a long random password and
 paste it into both places.
 
 Install the Caddy config (edit `deploy/Caddyfile` first to replace
-`babeltower.xyz` with your actual domain):
+`babel-tower.com` with your actual domain):
 
 ```sh
 cp deploy/Caddyfile /etc/caddy/Caddyfile
@@ -56,8 +56,8 @@ docker compose -f docker-compose.prod.yml up -d --build
 Verify:
 
 ```sh
-curl -i https://babeltower.xyz/v1/health
-curl -s https://babeltower.xyz/v1/server/info
+curl -i https://babel-tower.com/v1/health
+curl -s https://babel-tower.com/v1/server/info
 ```
 
 ## Backups

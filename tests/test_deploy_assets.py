@@ -6,7 +6,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def test_caddyfile_matches_phase_10_requirements() -> None:
     caddyfile = (ROOT / "deploy" / "Caddyfile").read_text()
 
-    assert "babeltower.xyz" in caddyfile
+    assert "babel-tower.com" in caddyfile
     assert "reverse_proxy localhost:8000" in caddyfile
     assert 'Strict-Transport-Security "max-age=31536000; includeSubDomains"' in caddyfile
     assert "X-Content-Type-Options nosniff" in caddyfile

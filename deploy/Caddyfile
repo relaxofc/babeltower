@@ -1,6 +1,6 @@
-# Replace babeltower.xyz with the domain you actually purchased. Caddy will
+# Replace babel-tower.com with the domain you actually purchased. Caddy will
 # automatically obtain and renew a TLS certificate for this hostname.
-babeltower.xyz {
+babel-tower.com {
     # API surface — everything under /v1/ goes to the FastAPI app.
     handle /v1/* {
         reverse_proxy localhost:8000
