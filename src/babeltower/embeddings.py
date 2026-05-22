@@ -7,7 +7,12 @@ from typing import Any, Optional
 
 from babeltower.config import get_settings
 
-EMBEDDING_MODEL = "voyage-3"
+# voyage-4-lite: current-gen lite tier at $0.02/M tokens (same as voyage-3),
+# 1024-dim default (no schema change), 32K context, MRL-truncatable to
+# 256/512/2048 if we ever want a smaller index. All voyage-4-series
+# embeddings are cross-compatible per Voyage's docs, so this can be
+# upgraded to voyage-4 or voyage-4-large later without re-embedding.
+EMBEDDING_MODEL = "voyage-4-lite"
 EMBEDDING_DIMENSIONS = 1024
 EMBEDDING_CACHE_TTL_SECONDS = 3600
 

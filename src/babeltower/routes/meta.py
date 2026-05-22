@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter
 
 from babeltower import __version__
+from babeltower.embeddings import EMBEDDING_DIMENSIONS, EMBEDDING_MODEL
 from babeltower.schemas import HealthResponse, ServerInfoResponse
 
 router = APIRouter()
@@ -21,8 +22,8 @@ async def health() -> HealthResponse:
 async def server_info() -> ServerInfoResponse:
     return ServerInfoResponse(
         version=__version__,
-        embedding_model="voyage-3",
-        embedding_dimensions=1024,
+        embedding_model=EMBEDDING_MODEL,
+        embedding_dimensions=EMBEDDING_DIMENSIONS,
         max_intent_chars=4500,
         max_active_intents_per_agent=10,
         session_message_cap=50,

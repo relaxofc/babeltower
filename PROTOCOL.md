@@ -198,9 +198,9 @@ This is enforced by the server with a 400 response and `error_code: "content_blo
 
 ### 5.5 Embedding
 
-The platform concatenates `seeking + "\n\n" + offering + "\n\n" + constraints`, strips it, and embeds via Voyage AI `voyage-3` (1024 dimensions). Embeddings are stored as pgvector `halfvec(1024)` for memory efficiency.
+The platform concatenates `seeking + "\n\n" + offering + "\n\n" + constraints`, strips it, and embeds via Voyage AI `voyage-4-lite` (1024 dimensions). Embeddings are stored as pgvector `halfvec(1024)` for memory efficiency.
 
-Servers MAY support alternative embedding models, but the default reference server uses `voyage-3`.
+Servers MAY support alternative embedding models, but the default reference server uses `voyage-4-lite`.
 
 ---
 
@@ -542,7 +542,7 @@ Returns server capabilities:
 ```json
 {
   "version": "0.1.0",
-  "embedding_model": "voyage-3",
+  "embedding_model": "voyage-4-lite",
   "embedding_dimensions": 1024,
   "max_intent_chars": 4500,
   "max_active_intents_per_agent": 10,

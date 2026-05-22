@@ -14,7 +14,7 @@ async def test_server_info(client):
     assert response.status_code == 200
     assert response.json() == {
         "version": "0.1.0",
-        "embedding_model": "voyage-3",
+        "embedding_model": "voyage-4-lite",
         "embedding_dimensions": 1024,
         "max_intent_chars": 4500,
         "max_active_intents_per_agent": 10,
