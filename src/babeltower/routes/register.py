@@ -8,7 +8,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from babeltower import github_oauth
@@ -53,6 +53,24 @@ async def get_redis(request: Request):
 
 REDIS_DEPENDENCY = Depends(get_redis)
 SESSION_DEPENDENCY = Depends(get_session)
+
+
+async def lock_github_user(session: AsyncSession, github_user_id: int) -> None:
+    """Serialize concurrent registration callbacks for the same GitHub user.
+
+    The 3-agents-per-GitHub-account cap (PROTOCOL.md §3.1) is the platform's
+    primary sybil resistance. Without this lock, two callbacks landing at
+    the same instant could each observe count<3 and both insert, blowing
+    past the cap. pg_advisory_xact_lock takes a session-scoped lock keyed
+    on the user id; it's released automatically at transaction commit.
+    Test fakes can replace this with the no-op `lock_github_user` hook.
+    """
+    if hasattr(session, "lock_github_user"):
+        await session.lock_github_user(github_user_id)  # type: ignore[attr-defined]
+        return
+    # Postgres pg_advisory_xact_lock requires a bigint; github user IDs
+    # already fit so just pass through.
+    await session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": int(github_user_id)})
 
 
 async def count_active_agents_for_github(session: AsyncSession, github_user_id: int) -> int:
@@ -128,6 +146,10 @@ async def oauth_callback(
 
     token_response = await github_oauth.exchange_code(code)
     github_user_id = await github_oauth.get_user_id(token_response["access_token"])
+
+    # Serialize concurrent callbacks for this GitHub user before counting.
+    # Released automatically at commit/rollback because it's a xact lock.
+    await lock_github_user(session, github_user_id)
     agent_count = await count_active_agents_for_github(session, github_user_id)
 
     if agent_count >= 3:

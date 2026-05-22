@@ -1,6 +1,7 @@
 import base64
 import json
 import os
+from unittest.mock import AsyncMock
 
 from httpx import ASGITransport, AsyncClient
 
@@ -26,6 +27,13 @@ class FakeRegistrationSession:
     def __init__(self, agent_count=0):
         self.agent_count = agent_count
         self.created_agents = []
+        self.locked_github_users: list[int] = []
+
+    async def lock_github_user(self, github_user_id):
+        # The real implementation takes a Postgres advisory lock; the fake
+        # just records that the call happened so tests can assert it ran
+        # before the count+insert pair.
+        self.locked_github_users.append(github_user_id)
 
     async def count_active_agents_for_github(self, github_user_id):
         return self.agent_count
@@ -182,3 +190,37 @@ async def test_registration_status_pending(make_agent):
 def test_registration_token_state_is_json():
     state = {"status": "pending", "agent_pubkey": "abc"}
     assert json.loads(json.dumps(state)) == state
+
+
+async def test_oauth_callback_locks_github_user_before_count_and_insert(monkeypatch, make_agent):
+    """Regression: the 3-agent cap was raceable because count + insert ran
+    without a lock. The fix takes a Postgres advisory xact lock keyed on
+    github_user_id. The test verifies the lock hook fires on the callback
+    path so concurrent callbacks would be serialized in production."""
+    session = FakeRegistrationSession(agent_count=0)
+    app = _registration_app(session)
+
+    monkeypatch.setattr(
+        github_oauth,
+        "exchange_code",
+        AsyncMock(return_value={"access_token": "tok"}),
+    )
+    monkeypatch.setattr(github_oauth, "get_user_id", AsyncMock(return_value=42))
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        agent = make_agent()
+        init_response = await client.post(
+            "/v1/register/init",
+            json=_signed_registration_payload(agent),
+        )
+        token = init_response.json()["registration_token"]
+        callback_response = await client.get(
+            "/v1/register/oauth/callback",
+            params={"code": "abc", "state": token},
+        )
+
+    assert callback_response.status_code == 200
+    # Lock must have been taken for this GitHub user before the insert.
+    assert session.locked_github_users == [42]
+    assert len(session.created_agents) == 1
