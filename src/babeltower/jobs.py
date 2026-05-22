@@ -68,6 +68,36 @@ async def run_maintenance(
                 close_reason="awaiting_join_expired",
             )
         )
+        # Active and match_proposed sessions whose 30-min wall clock has
+        # elapsed (active_at + 30min) — these used to depend solely on the
+        # in-memory monitor_task, so an API restart left them alive forever.
+        # expires_at is now the durable deadline, written when the session
+        # transitions to active.
+        await session.execute(
+            update(Session)
+            .where(
+                Session.status.in_(("active", "match_proposed")),
+                Session.expires_at <= now,
+            )
+            .values(
+                status="closed",
+                closed_at=now,
+                close_reason="time_limit_reached",
+            )
+        )
+        # Match_confirmed sessions whose 10-min handoff window has elapsed.
+        await session.execute(
+            update(Session)
+            .where(
+                Session.status == "match_confirmed",
+                Session.expires_at <= now,
+            )
+            .values(
+                status="closed",
+                closed_at=now,
+                close_reason="handoff_complete",
+            )
+        )
         await session.execute(
             update(Intent)
             .where(Intent.status.in_(("active", "dormant")), Intent.expires_at <= now)

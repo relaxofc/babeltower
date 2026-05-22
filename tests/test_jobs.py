@@ -42,6 +42,17 @@ class FakeMaintenanceSession:
                 session.status = "closed"
                 session.closed_at = now
                 session.close_reason = "awaiting_join_expired"
+            elif (
+                session.status in {"active", "match_proposed"}
+                and session.expires_at <= now
+            ):
+                session.status = "closed"
+                session.closed_at = now
+                session.close_reason = "time_limit_reached"
+            elif session.status == "match_confirmed" and session.expires_at <= now:
+                session.status = "closed"
+                session.closed_at = now
+                session.close_reason = "handoff_complete"
 
         for agent in self.agents:
             if agent.status == "soft_banned" and agent.soft_ban_lifts_at <= now:
@@ -160,3 +171,46 @@ async def test_maintenance_lifts_expired_soft_ban():
 
     assert agent.status == "active"
     assert agent.soft_ban_lifts_at is None
+
+
+def _session(session_id: str, *, status: str, expires_at: datetime):
+    return Session(
+        id=session_id,
+        agent_a_id="agt_a",
+        agent_b_id="agt_b",
+        connection_request_id=f"req_{session_id}",
+        status=status,
+        created_at=expires_at - timedelta(minutes=30),
+        expires_at=expires_at,
+        message_count=0,
+    )
+
+
+async def test_maintenance_closes_active_session_past_wall_clock():
+    """Regression: the 30-min active-session deadline used to live only in
+    an asyncio task in SessionManager. After a restart, that task was lost
+    and the session row in the DB kept its 72h awaiting_join expiry, so
+    nothing ever closed sessions that had aged past the protocol limit.
+    Now `expires_at` carries the durable deadline for whichever state the
+    session is in, and the maintenance job closes anything past it."""
+    now = datetime.now(timezone.utc)
+    session = FakeMaintenanceSession()
+    past = now - timedelta(seconds=1)
+    future = now + timedelta(minutes=10)
+    session.sessions = [
+        _session("ses_active_expired", status="active", expires_at=past),
+        _session("ses_active_ok", status="active", expires_at=future),
+        _session("ses_handoff_expired", status="match_confirmed", expires_at=past),
+        _session("ses_proposed_expired", status="match_proposed", expires_at=past),
+    ]
+
+    await run_maintenance(FakeSessionFactory(session), now_func=lambda: now)
+
+    by_id = {s.id: s for s in session.sessions}
+    assert by_id["ses_active_expired"].status == "closed"
+    assert by_id["ses_active_expired"].close_reason == "time_limit_reached"
+    assert by_id["ses_proposed_expired"].close_reason == "time_limit_reached"
+    assert by_id["ses_handoff_expired"].status == "closed"
+    assert by_id["ses_handoff_expired"].close_reason == "handoff_complete"
+    # Sessions whose deadline is still in the future stay open.
+    assert by_id["ses_active_ok"].status == "active"

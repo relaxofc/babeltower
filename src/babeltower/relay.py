@@ -228,7 +228,15 @@ class SessionManager:
         async with self._session_factory() as db:
             session_row = await db.get(Session, session_id)
             if session_row is not None and session_row.status == "awaiting_join":
+                now = self._now()
                 session_row.status = "active"
+                # Persist active_at and tighten expires_at to the 30-min
+                # wall-clock deadline (PROTOCOL.md §7.4). Without this, the
+                # session row keeps its 72h awaiting_join TTL and the
+                # maintenance job has no way to clean up sessions whose
+                # in-memory deadline task died across an API restart.
+                session_row.active_at = now
+                session_row.expires_at = now + ACTIVE_WINDOW
                 agent_a = await db.get(Agent, session_row.agent_a_id)
                 agent_b = await db.get(Agent, session_row.agent_b_id)
                 if agent_a is not None:

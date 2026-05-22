@@ -115,10 +115,21 @@ class Session(Base):
         default=utc_now,
         index=True,
     )
+    # expires_at carries the *next* state-deadline:
+    #   awaiting_join → original 72h TTL
+    #   active        → active_at + 30min (PROTOCOL.md §7.4 wall clock)
+    #   match_confirmed → confirmed_at + 10min (handoff window)
+    # The maintenance job uses this to durably close sessions whose
+    # in-memory deadline timer was lost across an API restart.
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     close_reason: Mapped[Optional[str]] = mapped_column(String(64))
     message_count: Mapped[int] = mapped_column(Integer, default=0)
+    # active_at is set the first time both members join the websocket; the
+    # 30-minute wall-clock starts from this instant. Persisted so reconnect
+    # after a restart can compute the remaining time instead of restarting
+    # the budget from zero.
+    active_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     match_proposed_by_id: Mapped[Optional[str]] = mapped_column(ForeignKey("agents.id"))
     match_proposed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     match_confirmed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))

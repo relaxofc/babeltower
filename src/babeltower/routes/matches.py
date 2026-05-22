@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -23,6 +23,9 @@ from babeltower.schemas import (
 
 router = APIRouter()
 SESSION_DEPENDENCY = Depends(get_session)
+
+# Mirror of relay.HANDOFF_WINDOW; importing from relay would create a cycle.
+HANDOFF_WINDOW = timedelta(minutes=10)
 
 
 def _now() -> datetime:
@@ -120,6 +123,10 @@ async def accept_match(
     proposer_pubkey = await get_agent_pubkey(session, session_row.match_proposed_by_id)
     session_row.status = "match_confirmed"
     session_row.match_confirmed_at = confirmed_at
+    # Reset the wall-clock to confirmed_at + 10min (handoff window). Without
+    # this, the row keeps the tighter active-window deadline and the
+    # maintenance job would close the session mid-handoff after a restart.
+    session_row.expires_at = confirmed_at + HANDOFF_WINDOW
     agent.matches_confirmed_total = (agent.matches_confirmed_total or 0) + 1
     proposer = await get_agent_by_id(session, session_row.match_proposed_by_id)
     if proposer is not None:
