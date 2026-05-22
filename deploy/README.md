@@ -40,6 +40,13 @@ caddy fmt --overwrite /etc/caddy/Caddyfile
 systemctl reload caddy
 ```
 
+Caddy serves the static landing page (`web/index.html`) at the domain root
+and reverse-proxies only `/v1/*` and `/metrics` to the FastAPI container.
+The repo ships at `/opt/babeltower`, so Caddy reads `/opt/babeltower/web`
+directly — no extra copy needed. Whenever you edit the landing copy,
+`git pull` on the host is enough; Caddy serves the new file on the next
+request.
+
 Start the stack:
 
 ```sh

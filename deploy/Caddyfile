@@ -1,7 +1,22 @@
 # Replace babeltower.xyz with the domain you actually purchased. Caddy will
 # automatically obtain and renew a TLS certificate for this hostname.
 babeltower.xyz {
-    reverse_proxy localhost:8000
+    # API surface — everything under /v1/ goes to the FastAPI app.
+    handle /v1/* {
+        reverse_proxy localhost:8000
+    }
+    # Prometheus scrape endpoint, same backend.
+    handle /metrics {
+        reverse_proxy localhost:8000
+    }
+    # Everything else: serve the static landing page. Humans who land here
+    # from a launch tweet should see something readable, not a JSON 404.
+    handle {
+        root * /opt/babeltower/web
+        try_files {path} /index.html
+        file_server
+    }
+
     header {
         Strict-Transport-Security "max-age=31536000; includeSubDomains"
         X-Content-Type-Options nosniff
