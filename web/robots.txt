@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /v1/
+Disallow: /metrics
+
+Sitemap: https://babel-tower.com/sitemap.xml
