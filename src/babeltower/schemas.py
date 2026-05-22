@@ -80,7 +80,11 @@ class OwnedIntentsResponse(BaseModel):
 
 
 class SearchQueryIntent(BaseModel):
-    match_type: str = Field(max_length=64, pattern=r"^[a-z0-9-]{1,64}$")
+    match_type: Optional[str] = Field(
+        default=None,
+        max_length=64,
+        pattern=r"^[a-z0-9-]{1,64}$",
+    )
     seeking: str = Field(max_length=2000)
     offering: str = Field(max_length=2000)
     constraints: str = Field(default="", max_length=500)
