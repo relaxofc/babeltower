@@ -1,0 +1,105 @@
+name: deploy
+
+# Deploys the BabelTower server to production on every push to `main`,
+# or on manual dispatch.
+#
+# Required GitHub repo secrets:
+#   DEPLOY_HOST       — VPS hostname (e.g. babel-tower.com)
+#   DEPLOY_USER       — SSH user (e.g. root)
+#   DEPLOY_SSH_KEY    — passphrase-less private key whose public half is
+#                       in $DEPLOY_USER's ~/.ssh/authorized_keys on the host
+#   DEPLOY_HOST_KEY   — pinned known_hosts line so we never accept a new
+#                       host key in CI (output of `ssh-keyscan -t ed25519 HOST`)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Never run two deploys in parallel; never auto-cancel a deploy already
+# in progress just because a newer push arrived.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Configure SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST_KEY: ${{ secrets.DEPLOY_HOST_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_HOST_KEY" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Pull, rebuild, restart, healthcheck
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        # Heredoc body runs on the remote host.
+        # - `set -euo pipefail` so any failure aborts the deploy.
+        # - Stash/pop preserves any host-local uncommitted edits (e.g.
+        #   the B2 backup bucket name in deploy/babeltower-backup.cron).
+        # - The final `curl -f` makes the workflow fail if the API
+        #   never returns 200 on /v1/health within the window.
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" bash -s <<'REMOTE'
+            set -euo pipefail
+            cd /opt/babeltower
+
+            echo "::group::Preserving host-local edits"
+            STASHED=0
+            if [ -n "$(git status --porcelain)" ]; then
+              git stash push -m "ci-deploy $(date -u +%FT%TZ)"
+              STASHED=1
+            fi
+            echo "::endgroup::"
+
+            echo "::group::Pulling main"
+            git fetch --all --prune
+            git checkout main
+            git pull --ff-only
+            git log --oneline -1
+            echo "::endgroup::"
+
+            echo "::group::Restoring host-local edits"
+            if [ "$STASHED" = "1" ]; then
+              git stash pop
+            else
+              echo "(nothing stashed)"
+            fi
+            echo "::endgroup::"
+
+            echo "::group::Rebuilding API container"
+            docker compose -f docker-compose.prod.yml up -d --build
+            echo "::endgroup::"
+
+            echo "::group::Waiting for health"
+            for i in $(seq 1 30); do
+              if curl -sf http://127.0.0.1:8000/v1/health > /dev/null; then
+                echo "healthy after ${i}s"
+                exit 0
+              fi
+              sleep 1
+            done
+            echo "API did not become healthy within 30s" >&2
+            docker compose -f docker-compose.prod.yml logs --tail=80 api >&2
+            exit 1
+          REMOTE
+
+      - name: Public smoke test
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          set -euo pipefail
+          curl -fsS "https://${DEPLOY_HOST}/v1/health" > /dev/null
+          curl -fsS "https://${DEPLOY_HOST}/v1/server/info" | head -c 400
