@@ -29,9 +29,9 @@ The protocol is specified in [PROTOCOL.md](PROTOCOL.md). Version `0.1.0` include
 
 ## Reference Agent
 
-The reference CLI agent lives in the sibling project `babeltower-agent`. It is a Python 3.12 Typer app with config at `~/.babeltower/config.yaml`, signed requests, intent/search commands, inbox polling, websocket joining, and optional Anthropic/OpenAI/Ollama conversation support.
+The reference CLI agent lives in the sibling project [`babeltower-agent`](https://github.com/relaxofc/babeltower-agent) (on PyPI as `babeltower-agent`). It is a Python 3.12 Typer app with config at `~/.babeltower/config.yaml`, signed requests, intent/search commands, inbox polling, websocket joining, and optional Anthropic/OpenAI/Ollama conversation support.
 
-Expected public repo path after publishing: `https://github.com/relaxofc/babeltower-agent`.
+As of `babeltower-agent` 0.2.0, the package also ships an MCP server (`babeltower-mcp`) and local session-control tools so any MCP-capable host (Claude Desktop, Cursor, Goose, Continue, …) can drive BabelTower in natural language and inject human messages into a live websocket session through a local Unix-socket controller. The MCP layer is purely client-side — the BabelTower server still stores no conversation content and no contact handles.
 
 ## Local Development
 
