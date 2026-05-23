@@ -2,7 +2,8 @@ from babeltower.db import get_session
 from babeltower.embeddings import EMBEDDING_DIMENSIONS
 from babeltower.main import create_app
 from babeltower.routes.intents import get_embedder
-from babeltower.schemas import SearchCandidate
+from babeltower.routes.search import search_intents
+from babeltower.schemas import SearchCandidate, SearchRequest
 
 
 class FakeSearchSession:
@@ -27,7 +28,7 @@ class FakeSearchSession:
                 continue
             if candidate["status"] != "active":
                 continue
-            if candidate["match_type"] != query.match_type:
+            if query.match_type is not None and candidate["match_type"] != query.match_type:
                 continue
             if candidate["similarity"] < 0.70:
                 continue
@@ -54,6 +55,17 @@ class FakeSearchSession:
             )
             for item in results[: body.max_results]
         ]
+
+
+class CaptureSqlSession:
+    def __init__(self):
+        self.statement = None
+        self.params = None
+
+    async def execute(self, statement, params):
+        self.statement = statement
+        self.params = params
+        return []
 
 
 def _search_payload(**query_overrides):
@@ -232,10 +244,63 @@ async def test_search_match_type_exact_match(make_agent, signed_client):
     assert [item["intent_id"] for item in response.json()["candidates"]] == ["int_technical"]
 
 
+async def test_search_without_match_type_searches_across_types(make_agent, signed_client):
+    requester = make_agent()
+    investor = make_agent(github_user_id=2)
+    fundraising = make_agent(github_user_id=3)
+    session = FakeSearchSession([requester, investor, fundraising])
+    session.candidates = [
+        _candidate(investor, intent_id="int_investor", match_type="investor"),
+        _candidate(fundraising, intent_id="int_fundraising", match_type="ai-investor"),
+    ]
+    app = _app_with_search_overrides(session)
+
+    payload = _search_payload()
+    del payload["query_intent"]["match_type"]
+
+    async with signed_client(app, requester) as client:
+        response = await client.post("/v1/search", json=payload)
+
+    assert [item["intent_id"] for item in response.json()["candidates"]] == [
+        "int_investor",
+        "int_fundraising",
+    ]
+
+
+async def test_search_sql_omits_match_type_filter_when_not_requested(make_agent):
+    requester = make_agent()
+    session = CaptureSqlSession()
+    payload = _search_payload()
+    del payload["query_intent"]["match_type"]
+
+    await search_intents(
+        session,
+        requester.row,
+        SearchRequest.model_validate(payload),
+        [0.01] * EMBEDDING_DIMENSIONS,
+    )
+
+    assert "i.match_type = :match_type" not in str(session.statement)
+    assert "match_type" not in session.params
+
+
+async def test_search_sql_keeps_match_type_filter_when_requested(make_agent):
+    requester = make_agent()
+    session = CaptureSqlSession()
+
+    await search_intents(
+        session,
+        requester.row,
+        SearchRequest.model_validate(_search_payload(match_type="investor")),
+        [0.01] * EMBEDDING_DIMENSIONS,
+    )
+
+    assert "i.match_type = :match_type" in str(session.statement)
+    assert session.params["match_type"] == "investor"
+
+
 async def test_search_rejects_malformed_match_type(make_agent, signed_client):
-    """PROTOCOL.md §5.2 restricts match_type to `[a-z0-9-]+`. A search with
-    an uppercase or otherwise malformed match_type must be rejected at the
-    request boundary instead of silently returning zero results."""
+    """When a search includes match_type it must still use the intent tag format."""
     requester = make_agent()
     session = FakeSearchSession([requester])
     app = _app_with_search_overrides(session)

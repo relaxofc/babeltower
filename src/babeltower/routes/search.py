@@ -41,11 +41,15 @@ async def search_intents(
 
     params: dict[str, Any] = {
         "query_emb": _embedding_literal(query_embedding),
-        "match_type": body.query_intent.match_type,
         "requester_agent_id": agent.id,
         "threshold": SIMILARITY_THRESHOLD,
         "limit": body.max_results,
     }
+    match_type_sql = ""
+    if body.query_intent.match_type is not None:
+        params["match_type"] = body.query_intent.match_type
+        match_type_sql = " AND i.match_type = :match_type"
+
     filter_clauses = []
     for index, (key, value) in enumerate(body.query_intent.filters.items()):
         key_param = f"filter_key_{index}"
@@ -73,7 +77,7 @@ async def search_intents(
         FROM intents i
         JOIN agents a ON a.id = i.agent_id
         WHERE i.status = 'active'
-          AND i.match_type = :match_type
+          {match_type_sql}
           AND i.agent_id != :requester_agent_id
           AND NOT EXISTS (
             SELECT 1 FROM blocks b
