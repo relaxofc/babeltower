@@ -25,6 +25,12 @@ class FakeWebSocket:
         self.closed = True
 
 
+class FakeBrokenSendWebSocket(FakeWebSocket):
+    async def send_json(self, payload):
+        del payload
+        raise RuntimeError("socket already closed")
+
+
 class FakeRelayDb:
     def __init__(self, session: Session):
         self.session = session
@@ -192,6 +198,26 @@ async def test_relay_message_cap_ends_session_on_51st_message():
     assert recipient_socket.sent[0]["type"] == "session_ended"
     assert sender_socket.closed is True
     assert recipient_socket.closed is True
+
+
+async def test_end_session_ignores_already_closed_socket_send_errors():
+    db_session = _db_session()
+    db = FakeRelayDb(db_session)
+    manager = SessionManager(session_factory=FakeRelayFactory(db))
+    broken_socket = FakeBrokenSendWebSocket()
+    healthy_socket = FakeWebSocket()
+    state = _state()
+    state.sockets["agt_a"] = broken_socket
+    state.sockets["agt_b"] = healthy_socket
+    state.active_metric_counted = False
+    manager._states[state.session_id] = state
+
+    await manager.end_session(state.session_id, "handoff_complete")
+
+    assert db_session.status == "closed"
+    assert healthy_socket.sent[0]["type"] == "session_ended"
+    assert broken_socket.closed is True
+    assert healthy_socket.closed is True
 
 
 def test_websocket_signed_hello_buffers_until_second_join(make_agent, monkeypatch):

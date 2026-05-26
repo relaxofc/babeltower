@@ -84,6 +84,13 @@ async def propose_match(
             match_status="proposed",
             proposed_by=agent.pubkey,
         )
+    if session_row.status == "match_confirmed" and session_row.match_proposed_by_id is not None:
+        proposer_pubkey = await get_agent_pubkey(session, session_row.match_proposed_by_id)
+        return MatchProposeResponse(
+            session_id=session_row.id,
+            match_status="confirmed",
+            proposed_by=proposer_pubkey,
+        )
     if session_row.status != "active":
         return _error_response(409, "session_not_active")
 

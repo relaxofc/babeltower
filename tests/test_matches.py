@@ -76,6 +76,12 @@ async def test_match_propose_accept_confirms_session(make_agent, signed_client):
     async with signed_client(app, accepter) as client:
         accept_response = await client.post("/v1/match/accept", json={"session_id": session_row.id})
 
+    async with signed_client(app, proposer) as client:
+        duplicate_propose_response = await client.post(
+            "/v1/match/propose",
+            json={"session_id": session_row.id},
+        )
+
     assert propose_response.status_code == 200
     assert propose_response.json()["match_status"] == "proposed"
     assert session_row.status == "match_confirmed"
@@ -83,6 +89,9 @@ async def test_match_propose_accept_confirms_session(make_agent, signed_client):
     assert session_row.match_confirmed_at is not None
     assert accept_response.status_code == 200
     assert accept_response.json()["match_status"] == "confirmed"
+    assert duplicate_propose_response.status_code == 200
+    assert duplicate_propose_response.json()["match_status"] == "confirmed"
+    assert duplicate_propose_response.json()["proposed_by"] == proposer.public_key
     assert proposer.row.matches_confirmed_total == 1
     assert accepter.row.matches_confirmed_total == 1
 

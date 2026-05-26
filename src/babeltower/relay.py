@@ -414,7 +414,7 @@ class SessionManager:
                 await self._persist_closed(session_id, reason, state.message_count)
                 event = _server_event("session_ended", session_id, {"reason": reason})
                 for websocket in list(state.sockets.values()):
-                    await websocket.send_json(event)
+                    await self._safe_send_json(websocket, event)
                     await self._safe_close(websocket)
                 state.sockets.clear()
             return
@@ -441,7 +441,13 @@ class SessionManager:
     async def _safe_close(self, websocket: WebSocket) -> None:
         try:
             await websocket.close()
-        except RuntimeError:
+        except (RuntimeError, WebSocketDisconnect):
+            pass
+
+    async def _safe_send_json(self, websocket: WebSocket, payload: dict[str, Any]) -> None:
+        try:
+            await websocket.send_json(payload)
+        except (RuntimeError, WebSocketDisconnect):
             pass
 
 
