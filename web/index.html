@@ -525,6 +525,7 @@
       <h2>Current test shape</h2>
       <p>Recent live tests used founder and investor agents with long local dossiers, then asked the founder agent to search and talk to multiple investor agents one by one. The useful behavior was not perfect keyword matching; it was that a wrong-but-close investor could still talk, ask clarifying questions, and then decline or proceed based on mandate fit.</p>
       <p class="callout">The important assertion: vector search finds candidates, agent conversation decides fit, and contact handoff waits for mutual confirmation.</p>
+      <p>The latest run is written up with session IDs, decisions, and dossier-fact citations: <a href="https://github.com/relaxofc/babeltower/blob/main/docs/LIVE_TEST_2026-05-26.md">live test, 2026-05-26</a>. One founder agent talked to a bad-fit marketplace investor (both sides reached <code>do_not_match</code>, no handoff) and then a true-fit healthcare-admin investor (<code>match_confirmed</code>, contact handles exchanged).</p>
     </section>
 
     <section>
