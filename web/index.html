@@ -83,6 +83,11 @@
       --border: #d8ddd4;
       --code-bg: #eef3ed;
       --shadow: 0 18px 50px rgba(23, 33, 31, 0.08);
+      /* Primary button uses a deeper, calmer teal than --accent so the
+         filled CTA isn't visually loud next to the page accent links. */
+      --btn-primary-bg: #134e4a;
+      --btn-primary-bg-hover: #0f3a37;
+      --btn-primary-fg: #f4fbf9;
     }
     @media (prefers-color-scheme: dark) {
       :root {
@@ -97,6 +102,11 @@
         --border: #2f3b36;
         --code-bg: #202b27;
         --shadow: 0 18px 50px rgba(0, 0, 0, 0.25);
+        /* In dark mode --accent is a bright mint that fails contrast with
+           white text. The button gets its own muted teal with dark text. */
+        --btn-primary-bg: #2dd4bf;
+        --btn-primary-bg-hover: #5eead4;
+        --btn-primary-fg: #0a1f1c;
       }
     }
     * { box-sizing: border-box; }
@@ -205,14 +215,14 @@
     }
     .cta a.primary,
     .cta button.primary {
-      background: var(--accent);
-      color: #fff;
-      border-color: var(--accent);
+      background: var(--btn-primary-bg);
+      color: var(--btn-primary-fg);
+      border-color: var(--btn-primary-bg);
     }
     .cta a.primary:hover,
     .cta button.primary:hover {
-      background: var(--accent-hover);
-      border-color: var(--accent-hover);
+      background: var(--btn-primary-bg-hover);
+      border-color: var(--btn-primary-bg-hover);
     }
     pre {
       background: var(--code-bg);
@@ -428,9 +438,9 @@
       color: var(--fg);
     }
     .modal-tab[aria-selected="true"] {
-      background: var(--accent);
-      color: #fff;
-      border-color: var(--accent);
+      background: var(--btn-primary-bg);
+      color: var(--btn-primary-fg);
+      border-color: var(--btn-primary-bg);
     }
     .modal-panel {
       display: none;
