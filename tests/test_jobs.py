@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from babeltower.jobs import run_maintenance
 from babeltower.models import Agent, ConnectionRequest, Intent, Session
@@ -102,7 +102,7 @@ def _intent(agent_id: str, now: datetime, *, status: str, expires_delta: timedel
 
 
 async def test_maintenance_flips_dormant_active_and_expires_records():
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     session = FakeMaintenanceSession()
     inactive = _agent("agt_inactive", now - timedelta(minutes=6))
     active = _agent("agt_active", now)
@@ -145,7 +145,7 @@ async def test_maintenance_flips_dormant_active_and_expires_records():
 
 
 async def test_maintenance_reactivates_after_poll():
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     session = FakeMaintenanceSession()
     agent = _agent("agt_returned", now - timedelta(minutes=6))
     intent = _intent(agent.id, now, status="active", expires_delta=timedelta(days=1))
@@ -160,7 +160,7 @@ async def test_maintenance_reactivates_after_poll():
 
 
 async def test_maintenance_lifts_expired_soft_ban():
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     agent = _agent("agt_soft_banned", now)
     agent.status = "soft_banned"
     agent.soft_ban_lifts_at = now - timedelta(seconds=1)
@@ -193,7 +193,7 @@ async def test_maintenance_closes_active_session_past_wall_clock():
     nothing ever closed sessions that had aged past the protocol limit.
     Now `expires_at` carries the durable deadline for whichever state the
     session is in, and the maintenance job closes anything past it."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     session = FakeMaintenanceSession()
     past = now - timedelta(seconds=1)
     future = now + timedelta(minutes=10)

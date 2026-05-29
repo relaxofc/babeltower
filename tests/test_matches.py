@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from babeltower.db import get_session
 from babeltower.main import create_app
@@ -18,7 +18,7 @@ class FakeMatchSession:
         return self._agents.get(pubkey)
 
     def add_session(self, a, b, *, status: str = "active"):
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         session = Session(
             id="ses_test_match",
             agent_a_id=a.row.id,

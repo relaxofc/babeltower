@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from httpx import ASGITransport, AsyncClient
 
@@ -327,7 +327,7 @@ async def test_refresh_intent_extends_expiry_and_reactivates_dormant(make_agent,
             create_response.json()["expires_at"].replace("Z", "+00:00")
         )
         session.intents[intent_id].status = "dormant"
-        session.intents[intent_id].expires_at = datetime.now(timezone.utc)
+        session.intents[intent_id].expires_at = datetime.now(UTC)
         response = await client.post(f"/v1/intents/{intent_id}/refresh")
 
     assert response.status_code == 200

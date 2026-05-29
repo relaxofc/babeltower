@@ -111,6 +111,7 @@ async def search(
         query.offering,
         query.constraints,
         redis=redis,
+        input_type="query",
     )
     candidates = await search_intents(session, agent, body, query_embedding)
     searches_total.inc()

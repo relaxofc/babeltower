@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -35,7 +35,7 @@ class SignedAsyncClient(AsyncClient):
         request = self.build_request(method, url, **kwargs)
 
         timestamp = request.headers.get("X-Timestamp") or (
-            datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+            datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
         )
         request.headers.setdefault("X-Agent-Pubkey", self._agent.public_key)
         request.headers.setdefault("X-Timestamp", timestamp)

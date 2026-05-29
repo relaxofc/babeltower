@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter
 
@@ -14,7 +14,7 @@ async def health() -> HealthResponse:
     return HealthResponse(
         status="ok",
         version=__version__,
-        time=datetime.now(timezone.utc),
+        time=datetime.now(UTC),
     )
 
 

@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -9,7 +9,7 @@ from babeltower.routes.agents import delete_agent_account
 @pytest.mark.asyncio
 async def test_delete_agent_account_uses_session_hook(make_agent) -> None:
     agent = make_agent().row
-    deleted_at = datetime.now(timezone.utc)
+    deleted_at = datetime.now(UTC)
 
     class FakeDeleteSession:
         def __init__(self):

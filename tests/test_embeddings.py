@@ -25,7 +25,7 @@ def test_intent_embedding_text_uses_protocol_separator():
 async def test_embed_intent_caches_identical_inputs(monkeypatch):
     calls = 0
 
-    async def fake_voyage(text):
+    async def fake_voyage(text, input_type="document"):
         nonlocal calls
         calls += 1
         return [0.1] * EMBEDDING_DIMENSIONS

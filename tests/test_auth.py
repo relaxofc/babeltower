@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from httpx import ASGITransport, AsyncClient
 
@@ -61,7 +61,7 @@ async def test_expired_timestamp_fails_401(make_agent, signed_client, fake_sessi
     app = _app_with_signed_routes()
     fake_session_override(app, agent)
     expired = (
-        (datetime.now(timezone.utc) - timedelta(seconds=61))
+        (datetime.now(UTC) - timedelta(seconds=61))
         .replace(microsecond=0)
         .isoformat()
         .replace("+00:00", "Z")

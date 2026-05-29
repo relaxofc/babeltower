@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -20,7 +20,7 @@ SESSION_DEPENDENCY = Depends(get_session)
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 async def get_agent_by_pubkey(session: AsyncSession, pubkey: str) -> Optional[Agent]:

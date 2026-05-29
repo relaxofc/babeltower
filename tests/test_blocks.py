@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from babeltower.db import get_session
 from babeltower.main import create_app
@@ -20,7 +20,7 @@ class FakeBlockSession:
         return self._agents.get(pubkey)
 
     def add_session(self, a, b, *, status: str = "active"):
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         session = Session(
             id=new_id("ses"),
             agent_a_id=a.row.id,
@@ -64,7 +64,7 @@ class FakeBlockSession:
         return closed
 
     async def check_and_apply_soft_ban(self, agent_id, now=None):
-        now = now or datetime.now(timezone.utc)
+        now = now or datetime.now(UTC)
         recent_blocks = [
             block
             for block in self.blocks.values()

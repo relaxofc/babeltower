@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy import delete, or_, update
@@ -15,7 +15,7 @@ SESSION_DEPENDENCY = Depends(get_session)
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 async def delete_agent_account(session: AsyncSession, agent: Agent, deleted_at: datetime) -> None:
