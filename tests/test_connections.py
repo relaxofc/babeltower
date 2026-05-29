@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Optional
 
 from babeltower.db import get_session
@@ -31,7 +31,7 @@ class FakeConnectionSession:
         return self._agents.get(pubkey)
 
     def add_intent(self, agent, *, intent_id: Optional[str] = None, status: str = "active"):
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         intent = Intent(
             id=intent_id or new_id("int"),
             agent_id=agent.row.id,

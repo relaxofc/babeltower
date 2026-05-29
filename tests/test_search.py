@@ -104,7 +104,9 @@ def _app_with_search_overrides(session):
     async def override_session():
         yield session
 
-    async def fake_embedder(seeking, offering, constraints="", *, redis=None):
+    async def fake_embedder(
+        seeking, offering, constraints="", *, redis=None, input_type="document"
+    ):
         return [0.01] * EMBEDDING_DIMENSIONS
 
     app.dependency_overrides[get_session] = override_session

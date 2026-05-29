@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from babeltower.db import async_session
@@ -13,7 +13,7 @@ from babeltower.models import Agent, ConnectionRequest, Intent, Session
 
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 async def run_maintenance(
@@ -28,7 +28,14 @@ async def run_maintenance(
             await session.run_maintenance(now)  # type: ignore[attr-defined]
             return
 
-        inactive_agents = select(Agent.id).where(Agent.last_seen_at < cutoff)
+        # An agent that has never polled the inbox (last_seen_at IS NULL) has
+        # by definition not polled within the 5-minute window, so its intents
+        # must be treated as dormant (PROTOCOL.md §5.2). `last_seen_at < cutoff`
+        # alone silently skips NULLs, leaving never-polled agents' intents
+        # "active" forever.
+        inactive_agents = select(Agent.id).where(
+            or_(Agent.last_seen_at < cutoff, Agent.last_seen_at.is_(None))
+        )
         active_agents = select(Agent.id).where(Agent.last_seen_at >= cutoff)
 
         await session.execute(

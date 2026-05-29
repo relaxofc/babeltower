@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy import or_, select
@@ -26,7 +26,7 @@ SESSION_DEPENDENCY = Depends(get_session)
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _intent_response(intent: Intent, agent_pubkey: str) -> IntentResponse:
@@ -84,9 +84,12 @@ async def load_inbox(session: AsyncSession, agent: Agent, now: datetime) -> Inbo
             Session,
             agent_a.pubkey.label("agent_a_pubkey"),
             agent_b.pubkey.label("agent_b_pubkey"),
+            ConnectionRequest.from_intent_id,
+            ConnectionRequest.target_intent_id,
         )
         .join(agent_a, agent_a.id == Session.agent_a_id)
         .join(agent_b, agent_b.id == Session.agent_b_id)
+        .join(ConnectionRequest, ConnectionRequest.id == Session.connection_request_id)
         .where(
             or_(Session.agent_a_id == agent.id, Session.agent_b_id == agent.id),
             Session.status == "awaiting_join",
@@ -94,17 +97,23 @@ async def load_inbox(session: AsyncSession, agent: Agent, now: datetime) -> Inbo
         )
         .order_by(Session.created_at)
     )
-    accepted_sessions = [
-        InboxSession(
-            session_id=session_row.id,
-            counterparty_pubkey=(
-                agent_b_pubkey if session_row.agent_a_id == agent.id else agent_a_pubkey
-            ),
-            accepted_at=session_row.created_at,
-            session_expires_at=session_row.expires_at,
+    accepted_sessions = []
+    for session_row, agent_a_pubkey, agent_b_pubkey, from_intent_id, target_intent_id in (
+        awaiting_result
+    ):
+        # agent_a is always the requester (from_intent), agent_b the target
+        # (target_intent); see accept_connection_request in routes/connections.
+        is_requester = session_row.agent_a_id == agent.id
+        accepted_sessions.append(
+            InboxSession(
+                session_id=session_row.id,
+                counterparty_pubkey=(agent_b_pubkey if is_requester else agent_a_pubkey),
+                accepted_at=session_row.created_at,
+                session_expires_at=session_row.expires_at,
+                my_intent_id=from_intent_id if is_requester else target_intent_id,
+                counterparty_intent_id=target_intent_id if is_requester else from_intent_id,
+            )
         )
-        for session_row, agent_a_pubkey, agent_b_pubkey in awaiting_result
-    ]
 
     proposal_result = await session.execute(
         select(Session, Agent.pubkey)

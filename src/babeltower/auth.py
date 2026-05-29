@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Optional
 
 from fastapi import Depends, Header, HTTPException, Request
@@ -23,12 +23,12 @@ def _parse_timestamp(value: str) -> datetime:
         raise HTTPException(status_code=401, detail="invalid timestamp") from exc
     if timestamp.tzinfo is None:
         raise HTTPException(status_code=401, detail="invalid timestamp")
-    return timestamp.astimezone(timezone.utc)
+    return timestamp.astimezone(UTC)
 
 
 def _validate_timestamp(value: str) -> None:
     timestamp = _parse_timestamp(value)
-    age = abs((datetime.now(timezone.utc) - timestamp).total_seconds())
+    age = abs((datetime.now(UTC) - timestamp).total_seconds())
     if age > SIGNATURE_WINDOW_SECONDS:
         raise HTTPException(status_code=401, detail="timestamp outside allowed window")
 

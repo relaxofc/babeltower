@@ -21,8 +21,11 @@ def intent_embedding_text(seeking: str, offering: str, constraints: str = "") ->
     return f"{seeking}\n\n{offering}\n\n{constraints}".strip()
 
 
-def _cache_key(text: str) -> str:
-    return f"emb:{hashlib.sha256(text.encode()).hexdigest()}"
+def _cache_key(text: str, input_type: str) -> str:
+    # input_type is part of the key: Voyage returns different vectors for the
+    # same text depending on whether it is embedded as a "query" or a
+    # "document", so the two must not share a cache entry.
+    return f"emb:{input_type}:{hashlib.sha256(text.encode()).hexdigest()}"
 
 
 async def _redis_get(redis: Any, key: str) -> Optional[list[float]]:
@@ -39,7 +42,7 @@ async def _redis_set(redis: Any, key: str, embedding: list[float]) -> None:
         await redis.setex(key, EMBEDDING_CACHE_TTL_SECONDS, json.dumps(embedding))
 
 
-async def _embed_with_voyage(text: str) -> list[float]:
+async def _embed_with_voyage(text: str, input_type: str = "document") -> list[float]:
     import voyageai
 
     settings = get_settings()
@@ -49,7 +52,7 @@ async def _embed_with_voyage(text: str) -> list[float]:
         result = client.embed(
             [text],
             model=EMBEDDING_MODEL,
-            input_type="document",
+            input_type=input_type,
             output_dimension=EMBEDDING_DIMENSIONS,
         )
         return list(result.embeddings[0])
@@ -63,9 +66,13 @@ async def embed_intent(
     constraints: str = "",
     *,
     redis: Any = None,
+    input_type: str = "document",
 ) -> list[float]:
+    # Stored intents are embedded as "document"; ephemeral search queries
+    # pass input_type="query" so Voyage applies the asymmetric query encoding
+    # it expects on the retrieval side (PROTOCOL.md §6.3).
     text = intent_embedding_text(seeking, offering, constraints)
-    key = _cache_key(text)
+    key = _cache_key(text, input_type)
     cached = await _redis_get(redis, key)
     if cached is not None:
         return cached
@@ -73,7 +80,7 @@ async def embed_intent(
     last_error: Exception | None = None
     for attempt in range(3):
         try:
-            embedding = await _embed_with_voyage(text)
+            embedding = await _embed_with_voyage(text, input_type)
             if len(embedding) != EMBEDDING_DIMENSIONS:
                 raise ValueError("voyage returned unexpected embedding dimension")
             await _redis_set(redis, key, embedding)

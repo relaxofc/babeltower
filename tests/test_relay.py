@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -114,7 +114,7 @@ class FakeWebsocketFactory:
 
 
 def _db_session():
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return Session(
         id="ses_relay",
         agent_a_id="agt_a",
@@ -148,7 +148,7 @@ def _message(number: int = 1):
 
 
 def _hello(agent, session_id: str, private_key: bytes):
-    timestamp = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    timestamp = datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     return {
         "type": "hello",
         "agent_pubkey": agent.pubkey,
@@ -223,7 +223,7 @@ async def test_end_session_ignores_already_closed_socket_send_errors():
 def test_websocket_signed_hello_buffers_until_second_join(make_agent, monkeypatch):
     a = make_agent(github_user_id=1)
     b = make_agent(github_user_id=2)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     session = Session(
         id="ses_ws",
         agent_a_id=a.row.id,
@@ -266,7 +266,7 @@ def test_websocket_signed_hello_buffers_until_second_join(make_agent, monkeypatc
 def test_websocket_bad_hello_closes_4401(make_agent, monkeypatch):
     a = make_agent(github_user_id=1)
     b = make_agent(github_user_id=2)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     session = Session(
         id="ses_ws_bad",
         agent_a_id=a.row.id,
@@ -308,7 +308,7 @@ async def test_relay_buffers_messages_for_disconnected_party_until_reconnect():
     b_sock1 = FakeWebSocket()
     state = _state()
     state.sockets = {"agt_a": a_sock, "agt_b": b_sock1}
-    state.active_at = datetime.now(timezone.utc)
+    state.active_at = datetime.now(UTC)
     state.active_metric_counted = True
     manager._states[state.session_id] = state
 
@@ -345,7 +345,7 @@ async def test_relay_error_frames_include_human_message():
     sender_socket = FakeWebSocket()
     state = _state()
     state.sockets = {"agt_a": sender_socket, "agt_b": FakeWebSocket()}
-    state.active_at = datetime.now(timezone.utc)
+    state.active_at = datetime.now(UTC)
     manager._states[state.session_id] = state
 
     oversized = "x" * (17 * 1024)
@@ -373,7 +373,7 @@ async def test_relay_join_closes_zombie_socket_when_agent_reconnects():
     other_sock = FakeWebSocket()
     state = _state()
     state.sockets = {"agt_a": stale_sock, "agt_b": other_sock}
-    state.active_at = datetime.now(timezone.utc)
+    state.active_at = datetime.now(UTC)
     state.active_metric_counted = True
     manager._states[state.session_id] = state
 

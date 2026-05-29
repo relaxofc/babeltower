@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any, Optional
 
 from fastapi import WebSocket
@@ -26,7 +26,7 @@ HANDOFF_WINDOW = timedelta(minutes=10)
 
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _parse_timestamp(value: str) -> Optional[datetime]:
@@ -36,7 +36,7 @@ def _parse_timestamp(value: str) -> Optional[datetime]:
         return None
     if timestamp.tzinfo is None:
         return None
-    return timestamp.astimezone(timezone.utc)
+    return timestamp.astimezone(UTC)
 
 
 def _timestamp() -> str:
@@ -179,7 +179,11 @@ class SessionManager:
             session_row = await db.get(Session, session_id)
             if agent is None or session_row is None:
                 return None
-            if agent.status in {"soft_banned", "hard_banned", "deleted"}:
+            # Soft-banned agents may still finish sessions that were already
+            # accepted: PROTOCOL.md §8.2 only blocks them from *opening new*
+            # sessions, while letting them "poll inbox and read state". Only
+            # hard-banned and deleted agents are barred from the relay.
+            if agent.status in {"hard_banned", "deleted"}:
                 return None
             if agent.id not in {session_row.agent_a_id, session_row.agent_b_id}:
                 return None

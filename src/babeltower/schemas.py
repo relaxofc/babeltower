@@ -150,6 +150,10 @@ class InboxSession(BaseModel):
     counterparty_pubkey: str
     accepted_at: datetime
     session_expires_at: datetime
+    # The two intents the session is about, so a joining agent can load its
+    # own intent and the counterparty's into the conversation context.
+    my_intent_id: Optional[str] = None
+    counterparty_intent_id: Optional[str] = None
 
 
 class InboxMatchProposal(BaseModel):

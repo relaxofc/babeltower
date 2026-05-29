@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import secrets
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Optional
 
 from pgvector.sqlalchemy import HALFVEC
@@ -28,7 +28,7 @@ def new_id(prefix: str) -> str:
 
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class Base(DeclarativeBase):

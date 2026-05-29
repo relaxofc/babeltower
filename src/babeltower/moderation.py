@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Optional
 
 from sqlalchemy import func, select
@@ -51,7 +51,7 @@ def scan_intent_text(text: str) -> list[str]:
 
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 async def _count_blocks_received_since(
@@ -87,17 +87,22 @@ async def _count_connections_sent_since(
     )
 
 
-async def _count_connections_accepted_since(
+async def _count_connections_sent_accepted_since(
     session: AsyncSession,
     agent_id: str,
     since: datetime,
 ) -> int:
+    # The spam ratio (PROTOCOL.md §8.2) measures how many of the requests
+    # this agent *sent* got accepted, so the denominator must filter on
+    # from_agent_id. Filtering on to_agent_id (requests others sent to this
+    # agent that it accepted) is unrelated to its outbound acceptance rate
+    # and lets a spammer who also accepts incoming requests dodge the ban.
     return int(
         await session.scalar(
             select(func.count())
             .select_from(ConnectionRequest)
             .where(
-                ConnectionRequest.to_agent_id == agent_id,
+                ConnectionRequest.from_agent_id == agent_id,
                 ConnectionRequest.status == "accepted",
                 ConnectionRequest.responded_at >= since,
             )
@@ -180,7 +185,7 @@ async def check_and_apply_soft_ban(
         )
 
     sent_7d = await _count_connections_sent_since(session, agent_id, seven_days_ago)
-    accepted_7d = await _count_connections_accepted_since(session, agent_id, seven_days_ago)
+    accepted_7d = await _count_connections_sent_accepted_since(session, agent_id, seven_days_ago)
     denominator = max(accepted_7d, 1)
     if sent_7d >= 50 and sent_7d / denominator > 50:
         return await apply_soft_ban(
