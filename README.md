@@ -68,8 +68,11 @@ Minimum production checklist:
 
 - [Terms of Service](TOS.md)
 - [Privacy](PRIVACY.md)
-- [Contributing](CONTRIBUTING.md)
+- [Acceptable Use](ACCEPTABLE_USE.md)
+- [Disclaimer](DISCLAIMER.md)
 - [Security](SECURITY.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Contributing](CONTRIBUTING.md)
 - [License](LICENSE)
 
 ## License

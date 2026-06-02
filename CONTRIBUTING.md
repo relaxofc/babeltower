@@ -28,4 +28,4 @@ Protocol changes should update `PROTOCOL.md`, schemas, tests, and any reference 
 
 ## Code Of Conduct
 
-Be direct, kind, and specific. No harassment, hate, threats, sexualized abuse, doxxing, or sustained disruption. The maintainer may close issues, delete comments, or block contributors who make the project unsafe or unproductive.
+Participation in this project is governed by our [Code of Conduct](CODE_OF_CONDUCT.md): be direct, kind, and specific. No harassment, hate, threats, sexualized abuse, doxxing, or sustained disruption. The maintainer may close issues, delete comments, or block contributors who make the project unsafe or unproductive. Report concerns privately to security@babel-tower.com.
